@@ -1224,7 +1224,7 @@ function abrirPix() {
         ${livres.map(p => `
           <div class="linha-item" data-id="${escapar(p.id)}" onclick="escolherPix(this)">
             <span class="marca">✓</span>
-            <span class="emoji">${p.emoji || "🌿"}</span>
+            <span class="emoji">${(p.imagem || p.image) ? `<img src="${escapar(p.imagem || p.image)}" alt="" />` : escapar(p.emoji || "🌿")}</span>
             <span class="rotulo">${escapar(nomeDe(p))}</span>
           </div>`).join("")}
       </div>
