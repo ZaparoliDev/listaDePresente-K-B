@@ -1814,7 +1814,10 @@ async function salvarMidiaDoItem(itemId, dados) {
   try { tema = localStorage.getItem(CONFIG.chaves.tema) || "light"; } catch (e) {}
 
   document.addEventListener("DOMContentLoaded", () => {
-    try { if (localStorage.getItem(CONFIG.chaves.boasVindas) !== "vista") abrirBoasVindas(); else document.body.classList.add("pagina-animada"); } catch (e) { abrirBoasVindas(); }
+    try {
+      if (localStorage.getItem(CONFIG.chaves.boasVindas) !== "vista") abrirBoasVindas();
+      else { document.body.classList.add("pagina-animada"); abrirCarregamento(); }
+    } catch (e) { abrirBoasVindas(); }
     hidratar();
     aplicarTema(tema);
     desenharCategorias();
