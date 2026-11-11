@@ -49,7 +49,7 @@ Database `enxoval` (ou o nome em `MONGODB_DB`), com três coleções:
 - **`products`** — `id`, `name` (ou `nome`), `categoria`, `emoji`, `preco`, `imagem` e `link` opcionais. Os itens iniciais da versão 2 são inseridos automaticamente sem duplicar nomes existentes. No modo administrador, **Enviar foto** permite escolher um arquivo JPG, PNG ou WebP, que é otimizado e guardado no MongoDB; **Link de referência** define o endereço exibido na prévia do presente.
 
 No modo administrador, o botão **Adicionar item** cadastra novos presentes diretamente pelo site, atribuindo o próximo identificador disponível no banco.
-- **`claimed_items`** — `item_id`, `claimed_at`
+- **`claimed_items`** — `item_id`, `claimed_at`, `reserved_by` (nome e sobrenome de quem reservou; itens marcados pelo admin ficam sem esse campo)
 - **`suggestions`** — `nome`, `titulo`, `mensagem`, `status`, `resposta`,
   `created_at`, `updated_at` (criada automaticamente no primeiro envio)
 
@@ -65,8 +65,8 @@ antigas briguem com a paleta nova.
 
 | Rota | Método | Descrição |
 |---|---|---|
-| `/api/products` | GET | Lista os itens com `isClaimed` já calculado |
-| `/api/products` | POST `{ item_id }` | Reserva pública: só marca o que está livre, nunca desmarca |
+| `/api/products` | GET | Lista os itens com `isClaimed` já calculado. Com `x-admin-token` válido, também devolve `reserved_by` e `claimed_at` |
+| `/api/products` | POST `{ item_id, reserved_by }` | Reserva pública: exige nome e sobrenome, só marca o que está livre, nunca desmarca |
 | `/api/products` | POST `{ item_id, toggleAdmin: true }` | Marca ou libera. **Exige** header `x-admin-token` válido |
 | `/api/auth` | POST `{ password }` | Valida a senha e devolve um token assinado, válido por 6 h |
 | `/api/suggestions` | POST `{ nome?, titulo, mensagem }` | Recebe uma sugestão pública e a adiciona ao mural |

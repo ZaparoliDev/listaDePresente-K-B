@@ -43,6 +43,7 @@ const CONFIG = {
     avisoEntrega: "O item escolhido deve ser levado no dia do chá.",
     reservando:   "Guardando o seu item",
     reservandoSub:"Só um instante enquanto confirmamos a disponibilidade. Em seguida abrimos o WhatsApp para você.",
+    nomeAviso:    "Os Noivos podem validar você pelo seu nome nesse item então coloque seu nome e sobrenome para facilitar",
     sugestaoTitulo:"Sugestões para o nosso cantinho",
     sugestaoTexto: "Tem uma ideia para deixar nossa lista ainda melhor? Envie para a gente e acompanhe por aqui.",
     sugestaoRodape:"Este espaço é temporário, enquanto nossa lista ainda está crescendo."
@@ -527,6 +528,16 @@ footer p em { font-family: 'Fraunces', serif; font-style: italic; color: var(--c
 }
 .caixa textarea { min-height: 8.5rem; resize: vertical; line-height: 1.5; }
 .caixa input[type="text"]:focus, .caixa select:focus, .caixa textarea:focus { border-color: var(--salvia); outline: none; }
+.caixa .aviso-nome {
+  margin: 0 0 .6rem; padding: .75rem 1rem; text-align: left;
+  font-size: .8rem; line-height: 1.6; color: var(--casca);
+  background: var(--papel-baixo); border-radius: var(--raio);
+}
+.reservado-por {
+  font-size: .76rem; line-height: 1.4; color: var(--texto2);
+  text-align: center; word-break: break-word;
+}
+.reservado-por b { font-family: 'Fraunces', serif; font-weight: 500; color: var(--musgo); }
 .campo-isca { position: absolute !important; left: -9999px !important; }
 .contador-texto { display: block; margin-top: .35rem; text-align: right; font-size: .75rem; color: var(--texto3); }
 .retorno-sugestao { min-height: 1.2rem; margin-top: .7rem; font-size: .82rem; color: var(--texto2); }
@@ -873,7 +884,9 @@ function alternarTema() {
 ═══════════════════════════════════════════ */
 async function carregarItens() {
   try {
-    const res = await fetch("/api/products");
+    const res = await fetch("/api/products", {
+      headers: tokenAdmin ? { "x-admin-token": tokenAdmin } : {}
+    });
     if (!res.ok) throw new Error("Resposta inválida");
     itens = await res.json();
     $("esqueleto").hidden = true;
@@ -984,9 +997,15 @@ function desenharGrade() {
     const emoji = p.emoji || "🌿";
     const imagem = p.imagem || p.image || "";
 
+    const quem = (tokenAdmin && p.isClaimed)
+      ? `<p class="reservado-por">${p.reserved_by
+          ? `Reservado por: <b>${escapar(p.reserved_by)}</b>`
+          : "Marcado pelos noivos"}</p>`
+      : "";
+
     const acaoReservaAdmin = p.isClaimed
       ? (tokenAdmin
-          ? `<button type="button" class="botao admin" data-id="${id}" onclick="alternarItem(event)">Devolver à lista</button>`
+          ? `${quem}<button type="button" class="botao admin" data-id="${id}" onclick="alternarItem(event)">Devolver à lista</button>`
           : `<div style="height:34px"></div>`)
       : (tokenAdmin
           ? `<button type="button" class="botao admin" data-id="${id}" onclick="alternarItem(event)">Marcar escolhido</button>`
@@ -1059,7 +1078,7 @@ async function reservarItem(item, nomePessoa) {
     const res = await fetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ item_id: id })
+      body: JSON.stringify({ item_id: id, reserved_by: nomePessoa })
     });
     const dados = await res.json();
     if (!res.ok) throw new Error(dados.error || "Não foi possível reservar este item.");
@@ -1093,8 +1112,9 @@ function pedirNomeParaReserva() {
       <form class="caixa" novalidate>
         <h2>Que alegria ter você aqui! 🌿</h2>
         <p class="sub">Antes de reservar, informe seu nome para o casal saber quem escolheu o presente.</p>
-        <label for="nome-presenteador">Seu nome</label>
-        <input type="text" id="nome-presenteador" maxlength="60" autocomplete="name" required placeholder="Como podemos te chamar?" />
+        <p class="aviso-nome">${escapar(CONFIG.textos.nomeAviso)}</p>
+        <label for="nome-presenteador">Seu nome e sobrenome</label>
+        <input type="text" id="nome-presenteador" maxlength="80" autocomplete="name" required placeholder="Nome e sobrenome" />
         <p class="erro" id="erro-nome-presenteador" hidden></p>
         <div class="acoes">
           <button class="voltar" type="button">Agora não</button>
@@ -1112,8 +1132,8 @@ function pedirNomeParaReserva() {
     tela.querySelector("form").addEventListener("submit", evento => {
       evento.preventDefault();
       const nome = campo.value.trim().replace(/\s+/g, " ");
-      if (nome.length < 2) {
-        erro.textContent = "Informe seu nome para continuar.";
+      if (nome.length < 5 || nome.split(" ").length < 2) {
+        erro.textContent = "Coloque seu nome e sobrenome para continuar.";
         erro.hidden = false;
         campo.focus();
         return;
@@ -1578,6 +1598,8 @@ function ligarModoAdmin() {
   atualizarNumeros();
   desenharGrade();
   if ($("tela-mural-sugestoes")) carregarSugestoesPublicas();
+  // Recarrega já com o token para trazer "Reservado por" de cada item
+  if (itensProntos) carregarItens();
 }
 
 function sairAdmin() {
@@ -1587,6 +1609,7 @@ function sairAdmin() {
   $("semente").style.visibility = "visible";
   desenharGrade();
   if ($("tela-mural-sugestoes")) carregarSugestoesPublicas();
+  carregarItens(); // recarrega sem token: os nomes somem da memória
 }
 
 function abrirNovoItem() {

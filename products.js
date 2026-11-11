@@ -33,6 +33,22 @@ const INITIAL_PRODUCTS = [
 
 let cachedClient = null;
 
+/**
+ * Limpa e valida o nome de quem está reservando.
+ * Exige nome + sobrenome (pelo menos duas palavras) para os noivos
+ * conseguirem identificar a pessoa.
+ */
+function limparNome(valor) {
+  if (typeof valor !== 'string') return null;
+  const nome = valor
+    .replace(/[\u0000-\u001F\u007F<>]/g, '') // controle e < >
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (nome.length < 5 || nome.length > 80) return null;
+  if (nome.split(' ').length < 2) return null;
+  return nome;
+}
+
 async function connectToDatabase() {
   if (cachedClient) return cachedClient;
   const client = new MongoClient(uri);
@@ -88,12 +104,26 @@ module.exports = async (req, res) => {
       products = await semearItensIniciais(collection, products);
       const claimedItems = await db.collection(CLAIMED_COLL).find({}).toArray();
 
-      const claimedIds = new Set(claimedItems.map(item => String(item.item_id).trim()));
+      // Só o admin (token válido) enxerga quem reservou cada item.
+      const isAdmin = verifyToken(req.headers['x-admin-token']);
+
+      const claimedById = new Map(
+        claimedItems.map(item => [String(item.item_id).trim(), item])
+      );
 
       const productsWithStatus = products.map(product => {
         const id = product.id || product.item_id || product._id;
-        return { ...product, id, isClaimed: claimedIds.has(String(id).trim()) };
+        const claim = claimedById.get(String(id).trim());
+        const base = { ...product, id, isClaimed: !!claim };
+        if (isAdmin && claim) {
+          base.reserved_by = claim.reserved_by || null;
+          base.claimed_at  = claim.claimed_at || null;
+        }
+        return base;
       });
+
+      // Resposta do admin nunca pode ser guardada em cache compartilhado
+      if (isAdmin) res.setHeader('Cache-Control', 'private, no-store');
 
       productsWithStatus.sort((a, b) => Number(a.id) - Number(b.id));
       return res.status(200).json(productsWithStatus);
@@ -170,7 +200,7 @@ module.exports = async (req, res) => {
     // POST — reserva de item (público) ou liberar/marcar (admin)
     // ─────────────────────────────────────────────────────────────
     if (req.method === 'POST') {
-      const { item_id, toggleAdmin, createProduct, name, categoria, emoji } = req.body || {};
+      const { item_id, toggleAdmin, createProduct, name, categoria, emoji, reserved_by } = req.body || {};
 
       if (createProduct) {
         if (!verifyToken(req.headers['x-admin-token'])) {
@@ -221,13 +251,23 @@ module.exports = async (req, res) => {
         return res.status(200).json({ success: true, message: 'Item marcado.' });
       }
 
-      // Reserva comum: só marca o que ainda está livre, nunca desmarca
+      // Reserva comum: exige nome e sobrenome, só marca o que ainda está livre
+      // e nunca desmarca. O nome fica salvo só no banco e só o admin consegue ler.
+      const nomePessoa = limparNome(reserved_by);
+      if (!nomePessoa) {
+        return res.status(400).json({ error: 'Informe seu nome e sobrenome.' });
+      }
+
       const alreadyClaimed = await db.collection(CLAIMED_COLL).findOne(query);
       if (alreadyClaimed) {
         return res.status(200).json({ success: true, alreadyClaimed: true, message: 'Item já estava reservado.' });
       }
 
-      await db.collection(CLAIMED_COLL).insertOne({ item_id, claimed_at: new Date() });
+      await db.collection(CLAIMED_COLL).insertOne({
+        item_id,
+        reserved_by: nomePessoa,
+        claimed_at: new Date()
+      });
       return res.status(200).json({ success: true });
     }
 
